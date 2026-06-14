@@ -1,9 +1,47 @@
+'use client';
+
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { ArrowRight, Braces, Database, KeyRound, ServerCog, ShieldCheck, Terminal } from 'lucide-react';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
+import { clearToken, getMe, isAuthError, setToken } from '@/lib/api';
 
 export default function HomePage() {
+  const router = useRouter();
+  const [checkingSession, setCheckingSession] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    getMe()
+      .then((me) => {
+        if (cancelled) return;
+        setToken('1');
+        router.replace(me.role === 'admin' ? '/admin' : '/workspace');
+      })
+      .catch((error) => {
+        if (isAuthError(error)) clearToken();
+        if (!cancelled) setCheckingSession(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [router]);
+
+  if (checkingSession) {
+    return (
+      <main className="console-page flex min-h-screen items-center justify-center px-6">
+        <div className="text-center">
+          <div className="mx-auto h-5 w-5 animate-spin rounded-full border-2 border-border border-t-foreground" />
+          <p className="mt-3 text-sm text-text-muted">Checking portal session...</p>
+        </div>
+      </main>
+    );
+  }
+
   return (
     <main className="console-page min-h-screen px-6 py-8">
       <div className="console-container">

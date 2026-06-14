@@ -9,6 +9,7 @@ import {
   Folder,
   Gauge,
   Home,
+  LogOut,
   MessageSquare,
   Settings,
   Shield,
@@ -113,6 +114,10 @@ export function Sidebar({ variant: propVariant }: SidebarProps) {
               Debug chat
             </Link>
           )}
+          <Link href="/logout" className="mt-2 flex items-center gap-2 rounded-lg px-3 py-2 text-sm text-text-secondary hover:bg-muted hover:text-text-primary">
+            <LogOut className="h-4 w-4" />
+            Sign out
+          </Link>
         </div>
       </div>
     </aside>
