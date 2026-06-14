@@ -10,14 +10,14 @@ Agent-MemoryForge is not trying to be another all-in-one agent platform. It is
 the memory plane that serious agent systems usually end up needing after the
 first demo works:
 
-- tenant and workspace isolation
+- tenant/workspace/actor isolation
 - short-term conversation checkpoints
 - active working memory for tasks
 - durable user preferences
 - semantic facts and business decisions
 - graph-style relationships
 - async memory distillation
-- authenticated SDK and REST integration
+- authenticated REST API and official Python SDK integration
 - admin/operator portal
 - quota and usage accounting
 - workspace MCP configuration and encrypted workspace secrets
@@ -69,7 +69,7 @@ Agent-MemoryForge is a memory infrastructure product with five main surfaces:
 
 | Surface | Role | Customer contract |
 | --- | --- | --- |
-| SDK | Customer integration layer | Build memory context and write memory from external agents |
+| Official Python SDK | Customer integration client | Build memory context and write memory from external agents |
 | Product Gateway | Public API/control plane | Auth, workspace routing, memory proxy, portal APIs, reference chat, quotas |
 | Memory Service | Internal data plane | File-first memory storage, search, read/write, derived index rebuilds |
 | Portal | Admin/operator console | Users, quotas, workspaces, MCP secrets, memory inspection, monitoring |
@@ -78,7 +78,7 @@ Agent-MemoryForge is a memory infrastructure product with five main surfaces:
 The preferred enterprise mode is the **Memory Layer** mode:
 
 1. Customer agent receives a user request.
-2. Customer agent calls Agent-MemoryForge SDK or Gateway memory APIs.
+2. Customer agent calls the official Python SDK or Gateway memory APIs.
 3. Agent-MemoryForge returns scoped memory context.
 4. Customer agent sends memory context plus the request to its own LLM stack.
 5. Customer agent writes useful facts, preferences, task state, or graph
@@ -117,6 +117,19 @@ Every memory operation is scoped by:
 `preferences`, `stm`, and `wm` are actor-private unless accessed by an admin,
 system, or service actor.
 
+That gives the product three primary isolation levels:
+
+1. **Tenant**: the enterprise/customer account boundary. Auth tokens carry a
+   tenant claim, and portal/admin operations are tenant-scoped.
+2. **Workspace**: the operational boundary inside a tenant. Gateway calls require
+   `x-workspace-id`; memory, MCP config, tool policy, secrets, prompts, quotas,
+   and traces are attached to explicit workspaces.
+3. **Actor/user**: the private memory boundary inside a workspace. Preferences,
+   STM, and WM are filtered by `actor_user_id`/`user_id` for normal users.
+
+RBAC, quotas, token usage accounting, encrypted workspace secrets, and MCP tool
+policy are governance controls layered on top of those isolation boundaries.
+
 ### File-First Source Of Truth
 
 Markdown files are the canonical memory record. Derived stores can be rebuilt.
@@ -154,7 +167,8 @@ That keeps user-visible latency isolated from:
 
 ### Context Selection
 
-The SDK and runtime assemble memory context from multiple tiers:
+The official Python SDK and reference runtime assemble memory context from
+multiple tiers:
 
 - user preferences
 - recent STM
@@ -308,7 +322,7 @@ flowchart TB
 sequenceDiagram
     participant User
     participant Agent as Customer Agent
-    participant SDK as Agent-MemoryForge SDK
+    participant SDK as Official Python SDK
     participant GW as Product Gateway
     participant MS as Memory Service
     participant Store as Markdown + Derived Indexes
@@ -484,7 +498,7 @@ python examples/langchain_memory_layer_agent.py \
 
 A passing run proves:
 
-- the SDK can authenticate through the Gateway
+- the official Python SDK can authenticate through the Gateway
 - `/v1/memory/write` stores private and shared memory
 - `build_context()` recalls expected memory tiers
 - LangChain can own the LLM step
@@ -494,8 +508,8 @@ A passing run proves:
 
 ## REST API Example
 
-Production integrations should call the Product Gateway or SDK. The Memory
-Service should stay private.
+Production integrations should call the Product Gateway or official Python SDK.
+The Memory Service should stay private.
 
 ```bash
 curl -X POST https://gateway.example.com/v1/memory/search \
@@ -1116,7 +1130,7 @@ Do not commit:
 - [API Reference](docs/API_REFERENCE.md)
 - [Configuration Reference](docs/CONFIG_REFERENCE.md)
 - [LangChain Integration](docs/LANGCHAIN_INTEGRATION.md)
-- [Full-chain Local Run](docs/RUN_FULL_CHAIN.md)
+- [Service Operations](docs/SERVICE_OPERATIONS.md)
 - [Docker Deployment](docs/DEPLOYMENT_DOCKER.md)
 - [Standard Deployment](docs/DEPLOYMENT_STANDARD.md)
 - [User Guide](docs/USER_GUIDE.md)
@@ -1134,4 +1148,4 @@ MIT. See [LICENSE](LICENSE).
 Agent-MemoryForge is designed as a memory layer that can be embedded into real
 agent platforms, not as a toy chat demo. The reference runtime and portal exist
 to validate and operate the memory product. The stable integration contract is
-the SDK/Gateway memory API.
+the Gateway memory API plus the official Python SDK.

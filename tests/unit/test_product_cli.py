@@ -59,26 +59,6 @@ def _install_fake_requests(monkeypatch, payload=None, lines=None):
     return fake
 
 
-def test_cli_run_full_chain(monkeypatch):
-    captured = {}
-
-    class _Args:
-        def __init__(self, **kwargs):
-            captured.update(kwargs)
-
-    def _run_full_chain(args):
-        captured["called"] = True
-        return 0
-
-    fake_module = types.SimpleNamespace(FullChainArgs=_Args, run_full_chain=_run_full_chain)
-    monkeypatch.setitem(__import__("sys").modules, "scripts.run_full_chain", fake_module)
-
-    result = cli.main(["run-full-chain", "--no-demo", "--once"])
-    assert result == 0
-    assert captured["no_demo"] is True
-    assert captured["once"] is True
-    assert captured["called"] is True
-
 
 def test_cli_full_chain_status_remote(monkeypatch, capfd):
     payload = {"data": {"gateway": {"pid": 1, "log_path": "/tmp/log"}}}

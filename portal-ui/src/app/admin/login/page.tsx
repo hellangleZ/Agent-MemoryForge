@@ -76,13 +76,13 @@ function AdminLoginContent() {
           </div>
           <p className="console-kicker">Agent-MemoryForge</p>
           <h1 className="mt-4 text-balance text-4xl font-semibold tracking-[-0.04em] text-text-primary sm:text-5xl">
-            Operate the Memory Service behind the SDK.
+            Operate the memory layer behind the API.
           </h1>
           <p className="mt-5 max-w-xl text-base leading-7 text-text-secondary">
-            The SDK is the product surface developers integrate. This portal is the internal plane for workspace scope, memory inspection, run traces, MCP policy, and account operations.
+            The Gateway API and official Python SDK are the developer integration surfaces. This portal is the control plane for workspace scope, memory inspection, run traces, MCP policy, quotas, and account operations.
           </p>
           <div className="mt-8 grid gap-3 sm:grid-cols-3">
-            {['Tenant isolation', 'Trace debugging', 'Tool policy'].map((item) => (
+            {['Tenant/workspace/user isolation', 'Trace debugging', 'Tool policy'].map((item) => (
               <div key={item} className="rounded-xl border bg-card p-4 shadow-sm">
                 <p className="text-sm font-medium text-text-primary">{item}</p>
                 <p className="mt-2 text-xs leading-5 text-text-muted">Admin session required. Backend RBAC enforced.</p>

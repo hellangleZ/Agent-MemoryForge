@@ -5,7 +5,7 @@ runtime feature flags.
 
 If you are just trying to run the system locally, start with:
 
-- `docs/RUN_FULL_CHAIN.md`
+- `docs/SERVICE_OPERATIONS.md`
 
 ---
 

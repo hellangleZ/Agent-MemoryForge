@@ -1,21 +1,35 @@
 # Architecture
 
-This repository is organized as a **4-surface product system**:
+This repository is organized as a **5-surface product system**:
 
-1) **Framework SDK** (`agent_memory_framework/`)
-2) **Memory Service** (`agent_memory_service/`)
-3) **Product Gateway** (`agent_runtime/product/`)
-4) **Portal UI** (`portal-ui/`)
+1) **Public Python SDK** (`agent_memory_lib/`)
+2) **Reference agent framework** (`agent_memory_framework/`)
+3) **Memory Service** (`agent_memory_service/`)
+4) **Product Gateway** (`agent_runtime/product/`)
+5) **Portal UI** (`portal-ui/`)
 
-The goal is to keep agent logic testable and portable (SDK), keep persistence and
-indexing isolated (Service), and keep authentication/workflows/ops UX
+The goal is to keep the customer integration contract small (Gateway API and
+official Python SDK), keep the reference agent runtime optional, keep persistence
+and indexing isolated (Service), and keep authentication/workflows/ops UX
 product-grade (Gateway + Portal).
 
 ---
 
 ## Components
 
-### 1) Framework SDK (`agent_memory_framework/`)
+### 1) Public Python SDK (`agent_memory_lib/`)
+
+Responsibilities:
+
+- Provide `MemoryClient` for Gateway-backed memory operations.
+- Attach tenant, workspace, bearer-token, and actor headers/payload fields.
+- Build memory context for external agents.
+- Write STM, WM, preferences, semantic facts, and graph facts through product APIs.
+
+This is the supported SDK surface for customer-owned agents. The REST Gateway
+remains the canonical API contract; the SDK is the first official client.
+
+### 2) Reference agent framework (`agent_memory_framework/`)
 
 Responsibilities:
 
@@ -28,7 +42,7 @@ Responsibilities:
 - Provide adapters to external systems (e.g. HTTP memory service).
 - Discover tools and agents for local/reference runtimes when explicitly enabled.
 
-The SDK is **self-contained**: it has no import dependency on `agent_runtime`
+The framework is **self-contained**: it has no import dependency on `agent_runtime`
 (the product layer). The dependency direction is strictly
 `agent_runtime` → `agent_memory_framework`.
 
@@ -56,7 +70,7 @@ Key modules:
 > now only hosts product concerns (gateway, auth, observability, templates); the
 > obsolete `agent_runtime/core/` package was removed entirely.
 
-### 2) Memory Service (`agent_memory_service/`)
+### 3) Memory Service (`agent_memory_service/`)
 
 Responsibilities:
 
@@ -75,7 +89,7 @@ Notes:
 - **Default backend is File-First (and the only backend)**: Markdown files are
   the source of truth, SQLite FTS is a derived index for search.
 
-### 3) Product Gateway (`agent_runtime/product/`)
+### 4) Product Gateway (`agent_runtime/product/`)
 
 Responsibilities:
 
@@ -91,7 +105,7 @@ Entrypoint:
 
 - `uvicorn agent_runtime.product.agent_gateway:app --port 8080`
 
-### 4) Portal UI (`portal-ui/`)
+### 5) Portal UI (`portal-ui/`)
 
 Responsibilities:
 
@@ -100,7 +114,8 @@ Responsibilities:
 - Admin setup: users, workspace membership, quotas, usage, monitoring, audit.
 - Reference chat/test surface.
 
-The portal configures product state; it is not required for SDK-only customers.
+The portal configures product state; it is not required for API/SDK-only
+customers.
 
 ---
 
@@ -141,15 +156,17 @@ gateway endpoint.
 - Intended for local/operator environments, not normal customer application
   traffic.
 
-See `docs/RUN_FULL_CHAIN.md` and `docs/API_REFERENCE.md`.
+See `docs/SERVICE_OPERATIONS.md` and `docs/API_REFERENCE.md`.
 
 ---
 
 ## Isolation model
 
-The isolation boundary is:
+The product has three primary isolation levels:
 
-- `tenant_id` + `workspace_id`
+1. **Tenant**: enterprise/customer account boundary.
+2. **Workspace**: operational boundary inside a tenant.
+3. **Actor/user**: private memory boundary inside a workspace.
 
 Where it is enforced:
 
@@ -163,6 +180,9 @@ Where it is enforced:
   memory. `semantic` and `graph` are shared workspace knowledge.
 - Framework adapter: can be configured to refuse read/write when scoping is
   disabled (feature flag).
+- Governance layer: workspace membership, RBAC, quota enforcement, token usage
+  accounting, encrypted workspace secrets, and MCP tool policy sit on top of the
+  data isolation model.
 
 ---
 

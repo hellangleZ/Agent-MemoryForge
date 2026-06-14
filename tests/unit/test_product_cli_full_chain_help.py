@@ -11,7 +11,6 @@ def test_product_cli_has_full_chain_commands():
         capture_output=True,
         text=True,
     )
-    assert "run-full-chain" in out.stdout
     assert "full-chain-status" in out.stdout
     assert "full-chain-stop" in out.stdout
     assert "full-chain-logs" in out.stdout

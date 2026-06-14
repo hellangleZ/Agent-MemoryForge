@@ -44,17 +44,6 @@ def main(argv: list[str] | None = None) -> int:
         help="Workspace id for x-workspace-id header",
     )
 
-    run_p = sub.add_parser("run-full-chain", help="Start infra + memory + gateway (+ optional demo)")
-    run_p.add_argument("--main-env", default="config/openai_main.env")
-    run_p.add_argument("--planner-env", default="config/context_planner.env")
-    run_p.add_argument("--distill-env", default="config/distill_worker.env")
-    run_p.add_argument("--memory-url", default="http://127.0.0.1:8001")
-    run_p.add_argument("--gateway-port", type=int, default=8080)
-    run_p.add_argument("--no-planner", action="store_true")
-    run_p.add_argument("--no-distill", action="store_true")
-    run_p.add_argument("--no-demo", action="store_true")
-    run_p.add_argument("--once", action="store_true")
-    run_p.add_argument("--verbose", action="store_true")
     status_p = sub.add_parser("full-chain-status", help="Show running full-chain process status")
     status_p.add_argument("--local", action="store_true", help="Use local process manager instead of gateway")
 
@@ -96,23 +85,6 @@ def main(argv: list[str] | None = None) -> int:
     )
 
     ns = parser.parse_args(argv)
-    if ns.cmd == "run-full-chain":
-        from scripts.run_full_chain import FullChainArgs, run_full_chain
-
-        repo_root = Path(__file__).resolve().parents[2]
-        args = FullChainArgs(
-            main_env=repo_root / ns.main_env,
-            planner_env=repo_root / ns.planner_env,
-            distill_env=repo_root / ns.distill_env,
-            memory_url=str(ns.memory_url),
-            gateway_port=int(ns.gateway_port),
-            no_planner=bool(ns.no_planner),
-            no_distill=bool(ns.no_distill),
-            no_demo=bool(ns.no_demo),
-            once=bool(ns.once),
-            verbose=bool(ns.verbose),
-        )
-        return run_full_chain(args)
     def _headers() -> Dict[str, str]:
         headers: Dict[str, str] = {}
         if getattr(ns, "api_key", None):

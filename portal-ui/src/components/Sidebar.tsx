@@ -60,13 +60,13 @@ export function Sidebar({ variant: propVariant }: SidebarProps) {
             </div>
             <div>
               <h1 className="text-sm font-semibold text-text-primary">Memory Control</h1>
-              <p className="mt-0.5 text-xs text-text-muted">{variant === 'admin' ? 'Admin plane' : 'SDK console'}</p>
+              <p className="mt-0.5 text-xs text-text-muted">{variant === 'admin' ? 'Admin plane' : 'Developer console'}</p>
             </div>
           </div>
           <div className="mt-4 rounded-lg border bg-muted/50 p-3">
             <p className="console-kicker">Product model</p>
             <p className="mt-1 text-xs leading-5 text-text-secondary">
-              SDK first. Memory Service runtime. Portal for operators and debugging.
+              API first. Official Python SDK. Portal for workspace controls and debugging.
             </p>
           </div>
         </div>

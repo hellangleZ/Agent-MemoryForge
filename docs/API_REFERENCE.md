@@ -5,7 +5,7 @@ This document describes the HTTP APIs exposed by:
 - Memory Service (`agent_memory_service/`)
 - Product Gateway (`agent_runtime/product/`)
 
-For local startup instructions, see `docs/RUN_FULL_CHAIN.md`.
+For local startup instructions, see `docs/SERVICE_OPERATIONS.md`.
 
 ---
 
@@ -329,8 +329,8 @@ Server-sent events stream:
 
 ## Python SDK Integration
 
-The SDK is designed so customers can keep their own agent runtime. They do not
-need to use the hosted demo agent.
+The official Python SDK is designed so customers can keep their own agent
+runtime. They do not need to use the hosted demo agent.
 
 ```python
 from agent_memory_lib import MemoryClient

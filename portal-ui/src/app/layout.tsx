@@ -17,7 +17,7 @@ const mono = IBM_Plex_Mono({
 
 export const metadata: Metadata = {
   title: 'Agent-MemoryForge Portal | Control Plane',
-  description: 'Admin and developer console for the Agent-MemoryForge SDK and Memory Service.',
+  description: 'Admin and developer console for the Agent-MemoryForge Gateway API, Python SDK, and memory service.',
 };
 
 export default function RootLayout({

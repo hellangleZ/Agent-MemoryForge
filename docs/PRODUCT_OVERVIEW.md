@@ -14,8 +14,8 @@ agent runtime.
   distillation.
 - Provides portal administration for users, quotas, workspaces, MCP secrets,
   tool policy, memory inspection, monitoring, and audit.
-- Provides SDK and REST integration so customers can keep their own agent
-  orchestration stack.
+- Provides REST API integration and an official Python SDK so customers can keep
+  their own agent orchestration stack.
 
 ## What The Product Is Not
 
@@ -51,7 +51,7 @@ Poor fits:
 | Memory Service | Internal data plane | Scoped `/v1/memory/*`; keep private in production |
 | Product Gateway | Public API/control plane | Auth, workspace routing, memory proxy, chat reference, portal APIs |
 | Portal | Admin/customer UI | Users, quotas, workspaces, tools, secrets, monitoring |
-| SDK | Integration library | Build memory context and write memory from customer agents |
+| Official Python SDK | Integration client | Build memory context and write memory from customer agents |
 | Reference runtime | Demo/test runtime | Optional proof environment, not required for customer agents |
 
 ## Tenant And Workspace Model
@@ -65,8 +65,19 @@ The product scope is `tenant_id + workspace_id`.
 - Workspace MCP servers, secrets, tool policy, custom reference-agent prompts,
   and memory are all attached to explicit workspace records.
 
-This is why customer agents should call the Gateway memory proxy or SDK with a
-workspace token/header instead of connecting directly to the Memory Service.
+This is why customer agents should call the Gateway memory proxy or official
+Python SDK with a workspace token/header instead of connecting directly to the
+Memory Service.
+
+There are three primary isolation levels:
+
+1. **Tenant**: the enterprise/customer account boundary.
+2. **Workspace**: the operational boundary inside a tenant.
+3. **Actor/user**: the private memory boundary for preferences, STM, and WM.
+
+RBAC, workspace membership, quota enforcement, usage accounting, encrypted MCP
+secrets, and tool policy are governance controls layered on top of those data
+boundaries.
 
 ## Integration Patterns
 
@@ -75,7 +86,7 @@ workspace token/header instead of connecting directly to the Memory Service.
 The expected enterprise integration is:
 
 1. Customer agent receives a user request.
-2. Agent calls the SDK or Gateway memory APIs to build context.
+2. Agent calls the official Python SDK or Gateway memory APIs to build context.
 3. Agent sends memory context plus the user request to its chosen LLM stack.
 4. Agent writes task state, facts, preferences, or graph relations after useful
    work.

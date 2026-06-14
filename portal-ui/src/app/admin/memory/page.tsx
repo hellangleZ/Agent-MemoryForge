@@ -23,6 +23,64 @@ import {
 } from 'lucide-react';
 import { getMemoryStats, memorySearch, memoryGet, rebuildMemoryIndex, MemorySearchResult, MemoryStats } from '@/lib/api';
 
+type TierStats = { count: number; size_bytes: number };
+
+function statNumber(value: unknown): number | null {
+  return typeof value === 'number' && Number.isFinite(value) ? value : null;
+}
+
+function statValue(value: unknown): number {
+  return statNumber(value) ?? 0;
+}
+
+function memoryTierProgress(tier: TierStats | undefined, totalSizeBytes: number): number | null {
+  if (!tier || tier.count <= 0 || tier.size_bytes <= 0 || totalSizeBytes <= 0) {
+    return null;
+  }
+  return Math.max(6, Math.min(100, Math.round((tier.size_bytes / totalSizeBytes) * 100)));
+}
+
+type IndexStats = NonNullable<NonNullable<MemoryStats['file_first']>['index']>;
+
+function indexStatus(index: IndexStats | undefined) {
+  if (!index) {
+    return { label: 'Unavailable', variant: 'info' as const, updated: 'No index metadata' };
+  }
+  const mtime = statNumber((index as { mtime_s?: unknown }).mtime_s);
+  if (mtime === null) {
+    return { label: 'Not built', variant: 'info' as const, updated: 'Never' };
+  }
+  if ((index as { stale?: boolean }).stale) {
+    return { label: 'Stale', variant: 'warning' as const, updated: new Date(mtime * 1000).toLocaleString() };
+  }
+  return { label: 'Healthy', variant: 'success' as const, updated: new Date(mtime * 1000).toLocaleString() };
+}
+
+function TierProgress({ value, isDark }: { value: number | null; isDark: boolean }) {
+  if (value === null) {
+    return (
+      <div className={cn(
+        "rounded-lg border px-3 py-2 text-xs",
+        isDark ? "border-white/10 text-slate-500" : "border-slate-200 text-slate-500"
+      )}>
+        Empty
+      </div>
+    );
+  }
+
+  return (
+    <div
+      className={cn("w-full rounded-full h-2", isDark ? "bg-white/10" : "bg-slate-200")}
+      aria-label={`Memory size share ${value}%`}
+    >
+      <div
+        className={cn("h-2 rounded-full", isDark ? "bg-slate-100" : "bg-slate-900")}
+        style={{ width: `${value}%` }}
+      />
+    </div>
+  );
+}
+
 function MemoryDetailModal({ memory, onClose, isDark }: { memory: MemorySearchResult | null; onClose: () => void; isDark: boolean }) {
   if (!memory) return null;
 
@@ -139,6 +197,24 @@ function MemoryContent() {
     pink: neutralStatTone,
     amber: neutralStatTone,
   };
+
+  const stm = stats?.stm;
+  const wm = stats?.wm;
+  const ltm = stats?.ltm;
+  const graph = stats?.knowledge_graph;
+  const totalTierSize =
+    statValue(stm?.size_bytes) +
+    statValue(wm?.size_bytes) +
+    statValue(ltm?.size_bytes);
+  const totalStorageSize = totalTierSize + statValue(graph?.size_bytes);
+  const totalRecords =
+    statValue(stm?.count) +
+    statValue(wm?.count) +
+    statValue(ltm?.count) +
+    statValue(graph?.nodes) +
+    statValue(graph?.edges);
+  const index = indexStatus(stats?.file_first?.index);
+  const statsAvailable = Boolean(stats);
 
   const fetchStats = useCallback(async () => {
     try {
@@ -359,15 +435,13 @@ function MemoryContent() {
                   <div className="space-y-2">
                     <div className="flex justify-between text-sm">
                       <span className={cn("transition-colors duration-300", isDark ? "text-slate-400" : "text-slate-600")}>Items</span>
-                      <span className={cn("font-mono transition-colors duration-300", isDark ? "text-white" : "text-slate-900")}>{stats?.stm?.count || 0}</span>
+                      <span className={cn("font-mono transition-colors duration-300", isDark ? "text-white" : "text-slate-900")}>{statsAvailable ? statValue(stm?.count) : '-'}</span>
                     </div>
                     <div className="flex justify-between text-sm">
                       <span className={cn("transition-colors duration-300", isDark ? "text-slate-400" : "text-slate-600")}>Size</span>
-                      <span className={cn("font-mono transition-colors duration-300", isDark ? "text-white" : "text-slate-900")}>{formatBytes(stats?.stm?.size_bytes || 0)}</span>
+                      <span className={cn("font-mono transition-colors duration-300", isDark ? "text-white" : "text-slate-900")}>{statsAvailable ? formatBytes(statValue(stm?.size_bytes)) : '-'}</span>
                     </div>
-                    <div className={cn("w-full rounded-full h-2", isDark ? "bg-white/10" : "bg-slate-200")}>
-                      <div className={cn("h-2 rounded-full", isDark ? "bg-slate-100" : "bg-slate-900")} style={{ width: '30%' }} />
-                    </div>
+                    <TierProgress value={memoryTierProgress(stm, totalTierSize)} isDark={isDark} />
                   </div>
                 </Card>
 
@@ -385,15 +459,13 @@ function MemoryContent() {
                   <div className="space-y-2">
                     <div className="flex justify-between text-sm">
                       <span className={cn("transition-colors duration-300", isDark ? "text-slate-400" : "text-slate-600")}>Items</span>
-                      <span className={cn("font-mono transition-colors duration-300", isDark ? "text-white" : "text-slate-900")}>{stats?.wm?.count || 0}</span>
+                      <span className={cn("font-mono transition-colors duration-300", isDark ? "text-white" : "text-slate-900")}>{statsAvailable ? statValue(wm?.count) : '-'}</span>
                     </div>
                     <div className="flex justify-between text-sm">
                       <span className={cn("transition-colors duration-300", isDark ? "text-slate-400" : "text-slate-600")}>Size</span>
-                      <span className={cn("font-mono transition-colors duration-300", isDark ? "text-white" : "text-slate-900")}>{formatBytes(stats?.wm?.size_bytes || 0)}</span>
+                      <span className={cn("font-mono transition-colors duration-300", isDark ? "text-white" : "text-slate-900")}>{statsAvailable ? formatBytes(statValue(wm?.size_bytes)) : '-'}</span>
                     </div>
-                    <div className={cn("w-full rounded-full h-2", isDark ? "bg-white/10" : "bg-slate-200")}>
-                      <div className={cn("h-2 rounded-full", isDark ? "bg-slate-100" : "bg-slate-900")} style={{ width: '50%' }} />
-                    </div>
+                    <TierProgress value={memoryTierProgress(wm, totalTierSize)} isDark={isDark} />
                   </div>
                 </Card>
 
@@ -411,15 +483,13 @@ function MemoryContent() {
                   <div className="space-y-2">
                     <div className="flex justify-between text-sm">
                       <span className={cn("transition-colors duration-300", isDark ? "text-slate-400" : "text-slate-600")}>Items</span>
-                      <span className={cn("font-mono transition-colors duration-300", isDark ? "text-white" : "text-slate-900")}>{stats?.ltm?.count || 0}</span>
+                      <span className={cn("font-mono transition-colors duration-300", isDark ? "text-white" : "text-slate-900")}>{statsAvailable ? statValue(ltm?.count) : '-'}</span>
                     </div>
                     <div className="flex justify-between text-sm">
                       <span className={cn("transition-colors duration-300", isDark ? "text-slate-400" : "text-slate-600")}>Size</span>
-                      <span className={cn("font-mono transition-colors duration-300", isDark ? "text-white" : "text-slate-900")}>{formatBytes(stats?.ltm?.size_bytes || 0)}</span>
+                      <span className={cn("font-mono transition-colors duration-300", isDark ? "text-white" : "text-slate-900")}>{statsAvailable ? formatBytes(statValue(ltm?.size_bytes)) : '-'}</span>
                     </div>
-                    <div className={cn("w-full rounded-full h-2", isDark ? "bg-white/10" : "bg-slate-200")}>
-                      <div className={cn("h-2 rounded-full", isDark ? "bg-slate-100" : "bg-slate-900")} style={{ width: '70%' }} />
-                    </div>
+                    <TierProgress value={memoryTierProgress(ltm, totalTierSize)} isDark={isDark} />
                   </div>
                 </Card>
 
@@ -437,15 +507,15 @@ function MemoryContent() {
                   <div className="space-y-2">
                     <div className="flex justify-between text-sm">
                       <span className={cn("transition-colors duration-300", isDark ? "text-slate-400" : "text-slate-600")}>Nodes</span>
-                      <span className={cn("font-mono transition-colors duration-300", isDark ? "text-white" : "text-slate-900")}>{stats?.knowledge_graph?.nodes || 0}</span>
+                      <span className={cn("font-mono transition-colors duration-300", isDark ? "text-white" : "text-slate-900")}>{statsAvailable ? statValue(graph?.nodes) : '-'}</span>
                     </div>
                     <div className="flex justify-between text-sm">
                       <span className={cn("transition-colors duration-300", isDark ? "text-slate-400" : "text-slate-600")}>Edges</span>
-                      <span className={cn("font-mono transition-colors duration-300", isDark ? "text-white" : "text-slate-900")}>{stats?.knowledge_graph?.edges || 0}</span>
+                      <span className={cn("font-mono transition-colors duration-300", isDark ? "text-white" : "text-slate-900")}>{statsAvailable ? statValue(graph?.edges) : '-'}</span>
                     </div>
                     <div className="flex justify-between text-sm">
                       <span className={cn("transition-colors duration-300", isDark ? "text-slate-400" : "text-slate-600")}>Size</span>
-                      <span className={cn("font-mono transition-colors duration-300", isDark ? "text-white" : "text-slate-900")}>{formatBytes(stats?.knowledge_graph?.size_bytes || 0)}</span>
+                      <span className={cn("font-mono transition-colors duration-300", isDark ? "text-white" : "text-slate-900")}>{statsAvailable ? formatBytes(statValue(graph?.size_bytes)) : '-'}</span>
                     </div>
                   </div>
                 </Card>
@@ -464,18 +534,12 @@ function MemoryContent() {
                   <div className="space-y-2">
                     <div className="flex items-center justify-between text-sm gap-2">
                       <span className={cn("transition-colors duration-300", isDark ? "text-slate-400" : "text-slate-600")}>Status</span>
-                      {stats?.file_first?.index?.stale ? (
-                        <Badge variant="warning">Stale</Badge>
-                      ) : (
-                        <Badge variant="success">Healthy</Badge>
-                      )}
+                      <Badge variant={index.variant}>{index.label}</Badge>
                     </div>
                     <div className="flex justify-between text-sm">
                       <span className={cn("transition-colors duration-300", isDark ? "text-slate-400" : "text-slate-600")}>Updated</span>
                       <span className={cn("font-mono transition-colors duration-300", isDark ? "text-white" : "text-slate-900")}>
-                        {typeof stats?.file_first?.index?.mtime_s === 'number'
-                          ? new Date(stats.file_first.index.mtime_s * 1000).toLocaleString()
-                          : 'Unknown'}
+                        {index.updated}
                       </span>
                     </div>
                     <Button
@@ -510,18 +574,13 @@ function MemoryContent() {
                     <div className="flex justify-between text-sm">
                       <span className={cn("transition-colors duration-300", isDark ? "text-slate-400" : "text-slate-600")}>Total Items</span>
                       <span className={cn("font-mono font-bold transition-colors duration-300", isDark ? "text-white" : "text-slate-900")}>
-                        {(stats?.stm?.count || 0) + (stats?.wm?.count || 0) + (stats?.ltm?.count || 0)}
+                        {statsAvailable ? totalRecords : '-'}
                       </span>
                     </div>
                     <div className="flex justify-between text-sm">
                       <span className={cn("transition-colors duration-300", isDark ? "text-slate-400" : "text-slate-600")}>Total Size</span>
                       <span className={cn("font-mono font-bold", isDark ? "text-purple-400" : "text-purple-600")}>
-                        {formatBytes(
-                          (stats?.stm?.size_bytes || 0) +
-                          (stats?.wm?.size_bytes || 0) +
-                          (stats?.ltm?.size_bytes || 0) +
-                          (stats?.knowledge_graph?.size_bytes || 0)
-                        )}
+                        {statsAvailable ? formatBytes(totalStorageSize) : '-'}
                       </span>
                     </div>
                   </div>

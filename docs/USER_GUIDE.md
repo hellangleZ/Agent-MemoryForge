@@ -208,7 +208,7 @@ This repository provides a production-minded reference implementation of **Agent
 
 ### 1. Components
 
-- **Framework SDK**: `agent_memory_framework/`
+- **Reference agent framework**: `agent_memory_framework/`
   - `Agent/Runtime`, tools registry
   - `ContextAssembler` with budget trace
   - `MultiAgentRuntime` (sequential/parallel fan-out)
