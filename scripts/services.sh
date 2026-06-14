@@ -102,6 +102,41 @@ fi
 
 export COMPOSE_PROJECT_NAME="$PROJECT_NAME"
 
+load_dotenv() {
+  local file="${1:-.env}"
+  [[ -f "$file" ]] || return 0
+
+  local line key value
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    line="$(printf '%s' "$line" | sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//')"
+    [[ -z "$line" || "$line" == \#* ]] && continue
+    if [[ "$line" == export[[:space:]]* ]]; then
+      line="${line#export}"
+      line="$(printf '%s' "$line" | sed -E 's/^[[:space:]]+//')"
+    fi
+    [[ "$line" == *"="* ]] || continue
+    key="$(printf '%s' "${line%%=*}" | sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//')"
+    value="${line#*=}"
+    [[ "$key" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]] || continue
+
+    # Explicit shell environment wins over .env. This keeps one-off overrides
+    # like PORTAL_PORT=3300 scripts/services.sh start predictable.
+    if [[ -n "${!key+x}" ]]; then
+      continue
+    fi
+
+    value="$(printf '%s' "$value" | sed -E 's/[[:space:]]+#.*$//; s/^[[:space:]]+//; s/[[:space:]]+$//')"
+    if [[ "$value" == \"*\" && "$value" == *\" ]]; then
+      value="${value:1:${#value}-2}"
+    elif [[ "$value" == \'*\' && "$value" == *\' ]]; then
+      value="${value:1:${#value}-2}"
+    fi
+    export "$key=$value"
+  done < "$file"
+}
+
+load_dotenv ".env"
+
 is_prod_compose() {
   [[ "$(basename "$COMPOSE_FILE")" == "docker-compose.prod.yml" ]]
 }
@@ -321,7 +356,7 @@ Services are starting/running:
   Gateway:   http://127.0.0.1:${GATEWAY_PORT:-8080}
   Memory:    internal Docker service memory:8001
   Embedding: disabled unless AGENT_MEMORY_VECTOR_ENABLED=1
-  Neo4j:     http://127.0.0.1:${NEO4J_HTTP_PORT:-7474}
+  Neo4j:     http://127.0.0.1:${NEO4J_HTTP_PORT:-17474}
 
 Useful commands:
   scripts/services.sh status
@@ -373,7 +408,10 @@ case "$ACTION" in
     start_stack ;;
   status|ps)
     compose ps
-    mapfile -t pids < <(project_pids | sort -u)
+    pids=()
+    while IFS= read -r pid; do
+      pids+=("$pid")
+    done < <(project_pids | sort -u)
     if ((${#pids[@]})); then
       log "old local project processes still running: ${pids[*]}"
     fi ;;

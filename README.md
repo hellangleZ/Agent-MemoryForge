@@ -28,6 +28,22 @@ name is **Agent-MemoryForge**.
 
 ---
 
+## Contents
+
+- [Why This Exists](#why-this-exists)
+- [What Agent-MemoryForge Is](#what-agent-memoryforge-is)
+- [Product Architecture](#product-architecture)
+- [Memory Logic](#memory-logic)
+- [Integration Modes](#integration-modes)
+- [LLM Provider Support](#llm-provider-support)
+- [Quick Start](#quick-start)
+- [Portal](#portal)
+- [External MCP](#external-mcp)
+- [Security Model](#security-model)
+- [Verification](#verification)
+
+---
+
 ## Why This Exists
 
 Most agent prototypes treat memory as a prompt appendix, a vector store, or a
@@ -388,6 +404,28 @@ your platform decide when to call them.
 
 The memory product remains the scoped memory backend.
 
+### What Your Agent Owns vs What Forge Owns
+
+In production, Agent-MemoryForge is usually not the component that decides the
+final answer. Your LangChain, LangGraph, OpenAI Agents SDK, CrewAI, AutoGen, or
+custom runtime can keep doing that.
+
+| Responsibility | Customer agent stack | Agent-MemoryForge |
+| --- | --- | --- |
+| User-facing reasoning | Yes | Reference runtime only |
+| Business tool orchestration | Yes | No |
+| LLM choice for final answer | Yes | Only for reference runtime |
+| Memory recall API | Calls Forge | Serves scoped context |
+| Memory write API | Calls Forge | Persists and indexes |
+| Embeddings and index space | Usually no | Yes, enterprise-controlled |
+| Async distillation LLM | Usually no | Yes, enterprise-controlled |
+| Tenant, user, workspace controls | Integrates | Enforces |
+| Audit, quota, trace data | Consumes | Records |
+
+This split is intentional. It lets an enterprise standardize memory quality,
+quota accounting, indexing, and retention without forcing every application
+team to rebuild its agent stack.
+
 ---
 
 ## Python SDK Example
@@ -504,6 +542,10 @@ It supports both API styles:
 | Responses | `OPENAI_API_STYLE=responses` | Force Responses API |
 | Chat | `OPENAI_API_STYLE=chat` | Force Chat Completions |
 
+Agent-MemoryForge is **not** Responses-API-only. Use `OPENAI_API_STYLE=chat`
+when your provider implements `/v1/chat/completions` but does not implement the
+OpenAI Responses API.
+
 Recommended defaults:
 
 - Use `auto` with OpenAI and Azure OpenAI-compatible endpoints.
@@ -577,16 +619,26 @@ containers, or download embedding models.
 
 ### Option A: Run The Docker Stack
 
-Clone the repository and create a local `.env`:
+Use this path when you want the full product running locally: Portal, Gateway,
+Memory Service, Redis, Postgres/pgvector, Neo4j, and the async distillation
+worker.
+
+#### 1. Clone the repository
 
 ```bash
 git clone https://github.com/hellangleZ/Agent-MemoryForge.git
 cd Agent-MemoryForge
+```
 
+#### 2. Create a local environment file
+
+```bash
 cp env.min.example .env
 ```
 
-Set the LLM provider values in `.env`. For OpenAI:
+Edit `.env` and set the LLM provider values.
+
+For OpenAI or an OpenAI-compatible endpoint that supports Responses API:
 
 ```bash
 LLM_PROVIDER=openai-like
@@ -605,17 +657,40 @@ OPENAI_MODEL=<model_or_deployment_name>
 OPENAI_API_STYLE=chat
 ```
 
-Start the stack:
+If your machine already uses the default ports, override them in `.env` before
+starting:
+
+```bash
+PORTAL_PORT=3300
+GATEWAY_PORT=18080
+POSTGRES_PORT=25432
+REDIS_PORT=26379
+NEO4J_HTTP_PORT=27474
+NEO4J_BOLT_PORT=27687
+```
+
+The service script reads `.env` directly. One-off shell variables still win:
+
+```bash
+PORTAL_PORT=3300 scripts/services.sh start
+```
+
+#### 3. Start the stack
 
 ```bash
 scripts/services.sh start
 ```
 
-On first run, Docker Compose pulls public base images such as Redis, Neo4j,
-Postgres/pgvector, and Node/Python base images as needed, then builds the local
-Gateway, Memory Service, distillation worker, embedding image, and Portal images.
-Later `start` and `restart` commands reuse existing images unless you pass
-`--build`.
+On first run, Docker Compose pulls public images such as Redis, Neo4j, and
+Postgres/pgvector, then builds the local Gateway, Memory Service, distillation
+worker, embedding image, and Portal image as needed.
+
+Later `start` and `restart` commands reuse existing images. Use `--build` after
+source or dependency changes:
+
+```bash
+scripts/services.sh --build restart
+```
 
 Local development secrets are generated under `.runtime/` when they are missing.
 Do not use those generated values for production.
@@ -632,7 +707,9 @@ Agent-MemoryForge does not download ONNX embedding model files automatically.
 For production, prefer a managed embedding provider or a controlled internal
 model artifact pipeline.
 
-Local URLs:
+#### 4. Check health
+
+Default local URLs:
 
 - Portal: `http://127.0.0.1:3000`
 - Gateway: `http://127.0.0.1:8080`
@@ -641,6 +718,53 @@ Local URLs:
 - Redis: `127.0.0.1:16379`
 - Postgres: `127.0.0.1:15432`
 - Neo4j: `http://127.0.0.1:17474`
+
+Health check:
+
+```bash
+curl -fsS http://127.0.0.1:8080/health
+```
+
+Expected response:
+
+```json
+{"ok":true}
+```
+
+If you changed `GATEWAY_PORT`, use that port in the health-check URL.
+
+#### 5. Create the first Portal admin
+
+There is no default admin account, and public signup is disabled by default.
+Create a local admin after cloning. The script prompts for the password so it is
+not written into shell history:
+
+```bash
+python scripts/create_portal_user.py \
+  --username admin \
+  --tenant-id admin \
+  --role admin
+```
+
+Then open:
+
+```text
+http://127.0.0.1:3000/admin/login
+```
+
+If you changed `PORTAL_PORT`, use that port instead.
+
+For local-only development you can enable browser signup with:
+
+```bash
+PORTAL_SIGNUP_ENABLED=1
+scripts/services.sh restart
+```
+
+Do not enable public signup in production unless it is protected by your own
+identity and tenant-provisioning flow.
+
+#### 6. Useful service commands
 
 Useful commands:
 
@@ -652,8 +776,43 @@ scripts/services.sh stop
 scripts/services.sh --build restart
 ```
 
-`start` and `restart` do not rebuild images by default. Use `--build` after
-source or dependency changes.
+`stop` stops containers and removes orphan containers for the selected Compose
+project. It does not remove named data volumes. Use `destroy` only when you want
+to delete local Redis/Postgres/Neo4j/memory volumes for that Compose project:
+
+```bash
+scripts/services.sh destroy
+```
+
+#### 7. Write and recall a memory from the SDK
+
+Install the SDK locally, then use the Gateway URL from your stack:
+
+```bash
+python -m venv .venv
+source .venv/bin/activate
+python -m pip install -U pip
+python -m pip install -e ".[all]"
+```
+
+Production apps should use real workspace-scoped tokens. For local development,
+you can mint a dev token in the example runner:
+
+```bash
+python examples/langchain_memory_layer_agent.py \
+  --gateway-url http://127.0.0.1:8080 \
+  --tenant-id admin \
+  --workspace-id ws_default \
+  --user-id admin \
+  --mint-dev-token \
+  --load-requests 5 \
+  --concurrency 1
+```
+
+That example writes sample memory, recalls it through `build_context()`, and
+prints latency metrics.
+
+If you changed `GATEWAY_PORT`, pass the updated Gateway URL.
 
 ### Option B: Python Development Install
 
@@ -673,6 +832,16 @@ python -m pip install -e ".[all]"
 This path does not start Redis, Postgres, Neo4j, Gateway, Portal, or the
 distillation worker. Start those with Docker Compose or run individual services
 manually according to the deployment guides.
+
+### Common Startup Problems
+
+| Symptom | Cause | Fix |
+| --- | --- | --- |
+| `bind: address already in use` | Another service is using a default port | Set `PORTAL_PORT`, `GATEWAY_PORT`, `POSTGRES_PORT`, `REDIS_PORT`, `NEO4J_HTTP_PORT`, or `NEO4J_BOLT_PORT` in `.env` |
+| Portal opens but login fails | No Portal user exists yet | Run `python scripts/create_portal_user.py --username admin --tenant-id admin --role admin` |
+| Chat works slowly | Distillation or provider calls are enabled against a slow LLM | Keep `MEMORY_DISTILL_ENABLED=0` for quick local UI tests, then enable it when testing memory extraction |
+| Local embedding service fails | `HOST_MODEL_PATH` does not contain a real ONNX model | Keep `AGENT_MEMORY_VECTOR_ENABLED=0`, or mount a real model folder |
+| Changes do not appear in Docker | Existing images were reused | Run `scripts/services.sh --build restart` |
 
 ---
 
@@ -726,6 +895,38 @@ Use it to:
 - debug distillation and recall
 
 The portal frontend lives in `portal-ui/` and is built with Next.js.
+
+### What The Portal Is For
+
+| Area | Purpose |
+| --- | --- |
+| Admin Overview | Tenant-level accounts, usage, quota, and operational shortcuts |
+| Users | Create employees, reset passwords, update roles, delete accounts, and inspect tenant scope |
+| Workspaces | Manage workspace records and membership |
+| Tools | Configure HTTPS MCP servers, workspace secrets, allowlists, denylists, and discovery |
+| Memory | Inspect memory counts, rebuild derived indexes, and search memory tiers |
+| Runs | Inspect reference-runtime traces |
+| Monitoring | Review audit events, token usage, quota enforcement, and operational metrics |
+| Profile | Change the current user's password and inspect session identity |
+| Debug Chat | Validate the reference runtime; not the primary production integration surface |
+
+### Portal Screenshots
+
+The screenshots below use local demo data only.
+
+Admin overview:
+
+![Agent-MemoryForge admin overview](docs/assets/portal-admin-overview.png)
+
+Workspace MCP configuration and redacted secrets:
+
+![Agent-MemoryForge workspace MCP configuration](docs/assets/portal-tools-mcp.png)
+
+Memory inspection and search:
+
+![Agent-MemoryForge memory search](docs/assets/portal-memory-search.png)
+
+### Portal Development
 
 ```bash
 cd portal-ui
