@@ -1,0 +1,106 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "agent-memory"
+version = "2.0.0"
+description = "Agent memory framework + services (modular install via extras)."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [{ name = "agent-memory contributors" }]
+
+# Core = library-only (no servers, no DB clients, no vector/onnx deps)
+dependencies = [
+  "requests>=2.31.0",
+  "python-dotenv>=1.0.0",
+]
+
+[project.optional-dependencies]
+# Framework extras (runtime, plugins, MCP, provider resolver)
+framework = [
+  "pydantic>=2.0.0",
+  "anyio>=4.0.0",
+  "mcp>=1.0.0",
+  "openai>=1.0.0",
+]
+
+# Product gateway (FastAPI) + Redis + Neo4j health probes
+gateway = [
+  "fastapi>=0.100.0",
+  "uvicorn[standard]>=0.22.0",
+  "redis>=4.5.0",
+  "neo4j>=5.0.0",
+]
+
+# Memory service deps (FastAPI + Redis + Neo4j + pgvector + FAISS + numpy)
+memory-service = [
+  "fastapi>=0.100.0",
+  "uvicorn[standard]>=0.22.0",
+  "redis>=4.5.0",
+  "neo4j>=5.0.0",
+  "numpy>=1.24.0",
+  "psycopg[binary]>=3.1.0",
+  "faiss-cpu>=1.7.4",
+]
+
+# Optional embedding service (ONNX runtime + tokenizer stack)
+embedding = [
+  "fastapi>=0.100.0",
+  "uvicorn[standard]>=0.22.0",
+  "pydantic>=2.0.0",
+  "coloredlogs>=15.0.0",
+  "onnxruntime>=1.15.0",
+  "modelscope>=1.8.0",
+  "transformers>=4.30.0",
+]
+
+# Chinese keyword extraction (optional)
+jieba = ["jieba>=0.42.1"]
+
+dev = [
+  "pytest>=7.4.0",
+  "pytest-cov>=4.1.0",
+  "pytest-asyncio>=0.21.0",
+  "pytest-mock>=3.11.0",
+  "ruff>=0.5.0",
+]
+
+all = [
+  "pydantic>=2.0.0",
+  "anyio>=4.0.0",
+  "mcp>=1.0.0",
+  "openai>=1.0.0",
+  "fastapi>=0.100.0",
+  "uvicorn[standard]>=0.22.0",
+  "redis>=4.5.0",
+  "neo4j>=5.0.0",
+  "numpy>=1.24.0",
+  "psycopg[binary]>=3.1.0",
+  "faiss-cpu>=1.7.4",
+  "coloredlogs>=15.0.0",
+  "onnxruntime>=1.15.0",
+  "modelscope>=1.8.0",
+  "transformers>=4.30.0",
+  "jieba>=0.42.1",
+  "pytest>=7.4.0",
+  "pytest-cov>=4.1.0",
+  "pytest-asyncio>=0.21.0",
+  "pytest-mock>=3.11.0",
+  "ruff>=0.5.0",
+]
+
+[tool.setuptools]
+include-package-data = true
+
+[tool.setuptools.packages.find]
+include = [
+  "agent_memory_framework*",
+  "agent_memory_lib*",
+  "agent_memory_service*",
+  "agent_runtime*",
+  "config*",
+  "utils*",
+  "scripts*",
+]

@@ -1,0 +1,13 @@
+{
+  # For public internet usage, configure proper email and ACME settings.
+  # email you@example.com
+}
+
+:80 {
+  reverse_proxy gateway:8080
+}
+
+# To enable HTTPS with a real domain, replace :80 with your domain:
+# example.com {
+#   reverse_proxy gateway:8080
+# }

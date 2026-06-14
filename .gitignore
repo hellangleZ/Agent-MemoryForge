@@ -1,0 +1,88 @@
+# Python
+__pycache__/
+**/__pycache__/
+*.py[cod]
+*.pyd
+
+# Virtualenv
+.venv/
+venv/
+ENV/
+
+# Test/coverage
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+
+# Tooling caches
+.mypy_cache/
+.ruff_cache/
+.runtime/
+
+# Build artifacts
+build/
+dist/
+*.egg-info/
+
+# Logs / runtime
+*.pid
+*.log
+logs/
+
+# OS
+.DS_Store
+
+# Editor swap files
+*.swp
+*.swo
+*.swx
+
+# Environment
+.env
+
+# Node.js
+node_modules/
+package-lock.json
+!portal-ui/package-lock.json
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# Next.js
+.next/
+out/
+next-env.d.ts
+tsconfig.tsbuildinfo
+playwright-report/
+test-results/
+
+# Production
+.vercel
+.turbo
+
+# Internal AI assistant / planning docs (not for public release)
+CLAUDE.md
+AGENTS.md
+GITHUB_DEPLOY_GUIDE.md
+PROGRESS.md
+prd.json
+
+# Portal source is part of the product; keep only generated/runtime files out of git.
+portal-ui/.next/
+portal-ui/node_modules/
+portal-ui/playwright-report/
+portal-ui/test-results/
+portal-ui/coverage/
+portal-ui/.env
+portal-ui/.env.*
+!portal-ui/.env.example
+
+# Local backups (may contain secrets) — never commit
+.env.bak*
+*.env.bak*
+.env.*.bak
+*.bak
+*.bak.*

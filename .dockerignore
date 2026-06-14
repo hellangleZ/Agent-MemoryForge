@@ -1,0 +1,43 @@
+.git
+.gitignore
+.dockerignore
+
+# Local environment and credentials must never enter images.
+.env
+.env.*
+*.pem
+*.key
+id_rsa
+id_ed25519
+
+# Python caches and local tooling output.
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+build/
+dist/
+*.egg-info/
+.venv/
+venv/
+
+# Runtime state and large local assets.
+*.log
+*.pid
+memory_service.pid
+agent_gateway.pid
+distill_worker.pid
+portal-ui.pid
+.runtime/
+models/
+data/
+tmp/
+
+# The portal has its own Docker build context.
+portal-ui/
+
+# OS/editor noise.
+.DS_Store

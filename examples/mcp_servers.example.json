@@ -1,0 +1,19 @@
+[
+  {
+    "name": "local",
+    "transport": "stdio",
+    "namespace": "local",
+    "command": "python",
+    "args": ["-m", "agent_memory_mcp_server"],
+    "env": {},
+    "cwd": null
+  },
+  {
+    "name": "third",
+    "transport": "streamable-http",
+    "namespace": "third",
+    "url": "http://127.0.0.1:8002/mcp",
+    "headers": {},
+    "timeout_s": 30.0
+  }
+]
