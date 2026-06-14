@@ -557,33 +557,36 @@ CONTEXT_PLANNER_OPENAI_API_STYLE=chat
 
 ## Quick Start
 
+There are two common local paths:
+
+- **Docker stack**: fastest way to run the product locally, including Portal,
+  Gateway, Memory Service, Redis, Postgres/pgvector, Neo4j, and the async
+  distillation worker.
+- **Python development install**: useful when you want to run tests, work on the
+  SDK/framework, or start individual services manually.
+
+`pip install -e ".[all]"` only installs the Python package and optional Python
+dependencies. It does **not** start Docker, pull database images, create
+containers, or download embedding models.
+
 ### Requirements
 
 - Python 3.11+
 - Docker and Docker Compose v2
 - Node.js 20+ if developing the portal outside Docker
 
-### Clone And Install
+### Option A: Run The Docker Stack
+
+Clone the repository and create a local `.env`:
 
 ```bash
-git clone https://github.com/<your-org>/agent-memoryforge.git
-cd agent-memoryforge
+git clone https://github.com/hellangleZ/Agent-MemoryForge.git
+cd Agent-MemoryForge
 
-python -m venv .venv
-source .venv/bin/activate
-python -m pip install -U pip
-python -m pip install -e ".[all]"
-```
-
-### Configure
-
-Start from the example file:
-
-```bash
 cp env.min.example .env
 ```
 
-Minimum local LLM configuration:
+Set the LLM provider values in `.env`. For OpenAI:
 
 ```bash
 LLM_PROVIDER=openai-like
@@ -592,14 +595,42 @@ OPENAI_MODEL=gpt-4o-mini
 OPENAI_API_STYLE=auto
 ```
 
-The local service wrapper generates development secrets under `.runtime/` when
-they are missing. Do not use those generated values for production.
+For a Chat Completions-only OpenAI-compatible endpoint:
 
-### Start The Stack
+```bash
+LLM_PROVIDER=openai-like
+OPENAI_BASE_URL=https://openai-compatible.example.com/v1
+OPENAI_API_KEY=<provider_api_key>
+OPENAI_MODEL=<model_or_deployment_name>
+OPENAI_API_STYLE=chat
+```
+
+Start the stack:
 
 ```bash
 scripts/services.sh start
 ```
+
+On first run, Docker Compose pulls public base images such as Redis, Neo4j,
+Postgres/pgvector, and Node/Python base images as needed, then builds the local
+Gateway, Memory Service, distillation worker, embedding image, and Portal images.
+Later `start` and `restart` commands reuse existing images unless you pass
+`--build`.
+
+Local development secrets are generated under `.runtime/` when they are missing.
+Do not use those generated values for production.
+
+Vector search is stored in Postgres/pgvector. The optional local embedding
+service is disabled by default for fast startup. To run local ONNX embeddings,
+provide a real model folder and enable the vector profile:
+
+```bash
+AGENT_MEMORY_VECTOR_ENABLED=1 HOST_MODEL_PATH=/absolute/path/to/onnx-model-folder scripts/services.sh --build start
+```
+
+Agent-MemoryForge does not download ONNX embedding model files automatically.
+For production, prefer a managed embedding provider or a controlled internal
+model artifact pipeline.
 
 Local URLs:
 
@@ -623,6 +654,25 @@ scripts/services.sh --build restart
 
 `start` and `restart` do not rebuild images by default. Use `--build` after
 source or dependency changes.
+
+### Option B: Python Development Install
+
+Use this when you want the Python package in editable mode for tests or local
+service development:
+
+```bash
+git clone https://github.com/hellangleZ/Agent-MemoryForge.git
+cd Agent-MemoryForge
+
+python -m venv .venv
+source .venv/bin/activate
+python -m pip install -U pip
+python -m pip install -e ".[all]"
+```
+
+This path does not start Redis, Postgres, Neo4j, Gateway, Portal, or the
+distillation worker. Start those with Docker Compose or run individual services
+manually according to the deployment guides.
 
 ---
 
