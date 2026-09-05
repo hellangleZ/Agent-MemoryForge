@@ -97,7 +97,9 @@ class MemoryManager:
             STM摘要列表
         """
         try:
-            k = last_k or self.stm_max_summaries
+            k = self.stm_max_summaries if last_k is None else int(last_k)
+            if k <= 0:
+                return []
 
             result = self.memory_client.retrieve_stm(
                 conversation_id=self.conversation_id, last_k=k
@@ -409,7 +411,7 @@ class MemoryManager:
             return {}
 
     def retrieve_semantic_memories(
-        self, query: str, top_k: int = 5
+        self, query: str, top_k: Optional[int] = 5
     ) -> List[Dict[str, Any]]:
         """
         检索语义记忆
@@ -422,7 +424,9 @@ class MemoryManager:
             语义记忆列表
         """
         try:
-            k = top_k or self.semantic_top_k
+            k = self.semantic_top_k if top_k is None else int(top_k)
+            if k <= 0:
+                return []
             result = self.memory_client.memory_search(
                 query=query,
                 top_k=k,

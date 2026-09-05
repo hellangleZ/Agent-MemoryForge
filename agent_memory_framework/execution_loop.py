@@ -103,8 +103,9 @@ class ExecutionLoop:
                 # 调用LLM
                 call_exc: Exception | None = None
                 response = None
+                max_attempts = max(1, int(self.max_retries))
 
-                for attempt in range(1, int(self.max_retries) + 1):
+                for attempt in range(1, max_attempts + 1):
                     try:
                         if previous_response_id:
                             response = self.llm_call_fn(
@@ -128,7 +129,7 @@ class ExecutionLoop:
                                 "temporarily",
                             ]
                         )
-                        if not retriable or attempt >= int(self.max_retries):
+                        if not retriable or attempt >= max_attempts:
                             break
                         time.sleep(min(0.25 * attempt, 1.0))
 

@@ -148,6 +148,21 @@ class TestMemoryClient:
         assert len(result["data"]["hits"]) == 1
         assert mock_session.post.call_args.args[0] == "http://localhost:8001/v1/memory/search"
 
+    def test_zero_max_retries_still_performs_initial_request(self, mock_session):
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {
+            "status": "success",
+            "data": {"hits": []},
+        }
+        mock_session.post.return_value = mock_response
+
+        client = MemoryClient("http://localhost:8001", max_retries=0)
+        result = client.memory_search(query="test", tiers=["semantic"])
+
+        assert result["status"] == "success"
+        mock_session.post.assert_called_once()
+
     def test_build_context_returns_agent_ready_messages(self, mocker):
         """SDK users can build memory context without adopting the demo agent."""
         client = MemoryClient(
@@ -229,6 +244,32 @@ class TestMemoryClient:
         assert len(messages) == 1
         assert messages[0]["role"] == "system"
         assert "Memory Use Rules" in messages[0]["content"]
+
+    def test_build_context_zero_search_limits_skip_search(self, mocker):
+        client = MemoryClient("http://localhost:8001")
+        search = mocker.patch.object(client, "memory_search")
+
+        client.build_context(
+            query="hello",
+            semantic_top_k=0,
+            graph_top_k=0,
+        )
+
+        search.assert_not_called()
+
+    def test_build_context_zero_preference_limit_skips_read(self, mocker):
+        client = MemoryClient("http://localhost:8001")
+        read = mocker.patch.object(client, "memory_read")
+
+        client.build_context(
+            query="hello",
+            user_id="u1",
+            preference_limit=0,
+            include_semantic=False,
+            include_graph=False,
+        )
+
+        read.assert_not_called()
 
     def test_build_context_falls_back_to_identifier_queries(self, mocker):
         client = MemoryClient("http://localhost:8001")

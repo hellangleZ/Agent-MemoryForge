@@ -41,6 +41,7 @@ class ContextPlan:
     stm_last_k: int
     semantic_top_k: int
     notes: str = ""
+    include_preferences: bool = True
 
 
 def _safe_int(value: Any, default: int) -> int:
@@ -64,24 +65,34 @@ def _parse_plan(raw_text: str, defaults: ContextPlan) -> ContextPlan:
     wm = bool(include.get("wm", defaults.include_wm))
 
     pref = include.get("preferences")
+    include_preferences = defaults.include_preferences
     preference_keys = defaults.preference_keys
     if isinstance(pref, dict) and pref.get("enabled", True) is not False:
         keys = pref.get("keys")
-        if isinstance(keys, list):
-            preference_keys = [str(k) for k in keys if str(k).strip()]
+        if include_preferences and isinstance(keys, list):
+            preference_keys = [str(k).strip() for k in keys if str(k).strip()]
     elif isinstance(pref, dict) and pref.get("enabled") is False:
+        include_preferences = False
         preference_keys = []
 
     stm = include.get("stm")
     stm_last_k = defaults.stm_last_k
-    if isinstance(stm, dict) and stm.get("enabled", True) is not False:
+    if (
+        defaults.stm_last_k > 0
+        and isinstance(stm, dict)
+        and stm.get("enabled", True) is not False
+    ):
         stm_last_k = _safe_int(stm.get("last_k"), defaults.stm_last_k)
     elif isinstance(stm, dict) and stm.get("enabled") is False:
         stm_last_k = 0
 
     semantic = include.get("semantic")
     semantic_top_k = defaults.semantic_top_k
-    if isinstance(semantic, dict) and semantic.get("enabled", True) is not False:
+    if (
+        defaults.semantic_top_k > 0
+        and isinstance(semantic, dict)
+        and semantic.get("enabled", True) is not False
+    ):
         semantic_top_k = _safe_int(semantic.get("top_k"), defaults.semantic_top_k)
     elif isinstance(semantic, dict) and semantic.get("enabled") is False:
         semantic_top_k = 0
@@ -94,6 +105,7 @@ def _parse_plan(raw_text: str, defaults: ContextPlan) -> ContextPlan:
         stm_last_k=stm_last_k,
         semantic_top_k=semantic_top_k,
         notes=notes,
+        include_preferences=include_preferences,
     )
 
 
@@ -135,6 +147,7 @@ class LLMContextPlanner:
                         "user_query": user_query,
                         "defaults": {
                             "wm": defaults.include_wm,
+                            "include_preferences": defaults.include_preferences,
                             "preference_keys": defaults.preference_keys,
                             "stm_last_k": defaults.stm_last_k,
                             "semantic_top_k": defaults.semantic_top_k,

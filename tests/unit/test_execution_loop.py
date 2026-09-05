@@ -59,3 +59,21 @@ def test_execution_loop_extracts_chat_completion_object_text():
     )
 
     assert loop.run_single_turn([{"role": "user", "content": "hi"}]) == "chat text"
+
+
+def test_execution_loop_zero_max_retries_still_calls_llm_once():
+    calls = []
+
+    def llm_call(messages):
+        calls.append(messages)
+        return "ok"
+
+    loop = ExecutionLoop(
+        agent_id="test_agent",
+        llm_call_fn=llm_call,
+        tool_registry=ToolRegistry(),
+        config={"max_retries": 0},
+    )
+
+    assert loop.run_single_turn([{"role": "user", "content": "hi"}]) == "ok"
+    assert len(calls) == 1

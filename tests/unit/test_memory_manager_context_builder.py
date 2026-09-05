@@ -1,5 +1,6 @@
 
 from agent_memory_framework.memory_runtime.context_builder import ContextBuilder
+from agent_memory_framework.memory_runtime.context_planner import ContextPlan
 from agent_memory_framework.memory_runtime.memory_manager import MemoryManager
 
 
@@ -13,6 +14,7 @@ class _FakeMemoryClient:
         return {"status": "success"}
 
     def retrieve_stm(self, conversation_id, last_k):
+        self.calls.append(("retrieve_stm", conversation_id, last_k))
         return {"status": "success", "data": [{"summary": "s1", "round_id": 1}]}
 
     def store_wm(self, user_id, task_id, state, ttl_s=None):
@@ -20,6 +22,7 @@ class _FakeMemoryClient:
         return {"status": "success"}
 
     def retrieve_wm(self, user_id, task_id):
+        self.calls.append(("retrieve_wm", user_id, task_id))
         # Default active WM shape.
         return {
             "status": "success",
@@ -35,9 +38,15 @@ class _FakeMemoryClient:
         return {"status": "success"}
 
     def retrieve_ltm_preference(self, user_id, key):
-        return {"status": "success", "data": "pref"}
+        self.calls.append(("retrieve_ltm_preference", user_id, key))
+        values = {
+            "response_style": "中文简洁",
+            "bulk_pref_013": "FAKE_MEMORY_BULK_ZBY_20260613: preference noise",
+        }
+        return {"status": "success", "data": values.get(key, "pref")}
 
     def list_ltm_preferences(self, user_id, limit=50):
+        self.calls.append(("list_ltm_preferences", user_id, limit))
         return {
             "status": "success",
             "data": {
@@ -46,8 +55,9 @@ class _FakeMemoryClient:
             },
         }
 
-    def memory_search(self, **_kwargs):
-        self.last_search_kwargs = dict(_kwargs)
+    def memory_search(self, **kwargs):
+        self.calls.append(("memory_search", kwargs))
+        self.last_search_kwargs = dict(kwargs)
         return {
             "status": "success",
             "data": {
@@ -73,6 +83,40 @@ def test_memory_manager_store_and_retrieve():
     assert manager.store_ltm_preference("lang", "en")["status"] == "success"
     assert manager.retrieve_ltm_preference("lang") == "pref"
     assert manager.retrieve_semantic_memories("q")
+
+
+def test_memory_manager_zero_limits_skip_backend_reads():
+    client = _FakeMemoryClient()
+    manager = MemoryManager(memory_client=client, user_id="u1")
+
+    assert manager.retrieve_stm_summaries(last_k=0) == []
+    assert manager.retrieve_semantic_memories("q", top_k=0) == []
+    assert not any(call[0] == "retrieve_stm" for call in client.calls)
+    assert not any(call[0] == "memory_search" for call in client.calls)
+
+
+def test_memory_manager_zero_default_stm_limit_skips_backend_read():
+    client = _FakeMemoryClient()
+    manager = MemoryManager(
+        memory_client=client,
+        user_id="u1",
+        config={"stm_max_summaries": 0},
+    )
+
+    assert manager.retrieve_stm_summaries() == []
+    assert not any(call[0] == "retrieve_stm" for call in client.calls)
+
+
+def test_memory_manager_zero_default_semantic_limit_skips_backend_read():
+    client = _FakeMemoryClient()
+    manager = MemoryManager(
+        memory_client=client,
+        user_id="u1",
+        config={"semantic_top_k": 0},
+    )
+
+    assert manager.retrieve_semantic_memories("q", top_k=None) == []
+    assert not any(call[0] == "memory_search" for call in client.calls)
 
 
 def test_working_memory_lifecycle_start_cancel_complete():
@@ -158,6 +202,120 @@ def test_context_builder_respects_zero_stm_limit():
 
     assert builder._get_stm_context(user_query="anything", last_k=0) == ""
     assert not any(call[0] == "retrieve_stm" for call in client.calls)
+
+
+def test_context_builder_respects_explicit_preference_opt_out(mocker):
+    client = _FakeMemoryClient()
+    manager = MemoryManager(memory_client=client, user_id="u1")
+    builder = ContextBuilder(memory_manager=manager, text_processor=_FakeTextProcessor())
+    mocker.patch(
+        "agent_memory_framework.memory_runtime.context_builder.LLMContextPlanner.plan",
+        return_value=ContextPlan(
+            include_wm=False,
+            include_preferences=False,
+            preference_keys=[],
+            stm_last_k=0,
+            semantic_top_k=0,
+        ),
+    )
+
+    context = builder.build_enhanced_context(
+        user_query="hello",
+        conversation_history=[],
+    )
+
+    assert "## User Preferences" not in "\n".join(
+        str(message.get("content") or "") for message in context
+    )
+    assert not any(call[0] == "list_ltm_preferences" for call in client.calls)
+
+
+def test_context_builder_zero_config_skips_disabled_memory_reads(mocker, monkeypatch):
+    client = _FakeMemoryClient()
+    manager = MemoryManager(memory_client=client, user_id="u1")
+    builder = ContextBuilder(
+        memory_manager=manager,
+        text_processor=_FakeTextProcessor(),
+        config={
+            "include_preferences": False,
+            "stm_max_summaries": 0,
+            "semantic_top_k": 0,
+        },
+    )
+    monkeypatch.setenv("AGENT_GRAPH_CONTEXT_TOP_K", "0")
+    mocker.patch(
+        "agent_memory_framework.memory_runtime.context_builder.LLMContextPlanner.plan",
+        side_effect=lambda user_query, defaults: defaults,
+    )
+
+    builder.build_enhanced_context(user_query="hello", conversation_history=[])
+
+    assert not any(
+        call[0] in {"retrieve_stm", "memory_search", "list_ltm_preferences"}
+        for call in client.calls
+    )
+    assert any(call[0] == "retrieve_wm" for call in client.calls)
+
+
+def test_context_builder_filters_and_truncates_selected_preferences(mocker, monkeypatch):
+    client = _FakeMemoryClient()
+    manager = MemoryManager(memory_client=client, user_id="u1")
+    builder = ContextBuilder(memory_manager=manager, text_processor=_FakeTextProcessor())
+    monkeypatch.setenv("AGENT_PREF_VALUE_MAXLEN", "4")
+    mocker.patch(
+        "agent_memory_framework.memory_runtime.context_builder.LLMContextPlanner.plan",
+        return_value=ContextPlan(
+            include_wm=False,
+            preference_keys=[" response_style ", "bulk_pref_013"],
+            stm_last_k=0,
+            semantic_top_k=0,
+        ),
+    )
+
+    context = builder.build_enhanced_context(user_query="hello", conversation_history=[])
+    rendered = "\n".join(str(message.get("content") or "") for message in context)
+
+    assert "response_style: 中文简洁" in rendered
+    assert "bulk_pref_013" not in rendered
+    assert ("retrieve_ltm_preference", "u1", "response_style") in client.calls
+    assert ("retrieve_ltm_preference", "u1", "bulk_pref_013") in client.calls
+    assert not any(call[0] == "list_ltm_preferences" for call in client.calls)
+
+
+def test_context_builder_graph_retrieval_is_independent_of_semantic_limit(mocker, monkeypatch):
+    client = _FakeMemoryClient()
+    manager = MemoryManager(memory_client=client, user_id="u1")
+    builder = ContextBuilder(memory_manager=manager, text_processor=_FakeTextProcessor())
+    monkeypatch.setenv("AGENT_GRAPH_CONTEXT_TOP_K", "2")
+    mocker.patch(
+        "agent_memory_framework.memory_runtime.context_builder.LLMContextPlanner.plan",
+        return_value=ContextPlan(
+            include_wm=False,
+            include_preferences=False,
+            preference_keys=[],
+            stm_last_k=0,
+            semantic_top_k=0,
+        ),
+    )
+
+    builder.build_enhanced_context(user_query="hello", conversation_history=[])
+
+    graph_calls = [
+        call for call in client.calls
+        if call[0] == "memory_search" and call[1].get("tiers") == ["graph"]
+    ]
+    assert graph_calls
+    assert all(call[1]["top_k"] == 7 for call in graph_calls)
+
+
+def test_context_builder_explicit_zero_search_limits_skip_backend_reads():
+    client = _FakeMemoryClient()
+    manager = MemoryManager(memory_client=client, user_id="u1")
+    builder = ContextBuilder(memory_manager=manager, text_processor=_FakeTextProcessor())
+
+    assert builder._get_relevant_semantic_facts("hello", top_k=0) == []
+    assert builder._get_relevant_graph_facts("hello", top_k=0) == []
+    assert not any(call[0] == "memory_search" for call in client.calls)
 
 
 def test_context_builder_uses_semantic_fallback_queries_for_long_questions():

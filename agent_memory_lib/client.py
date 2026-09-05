@@ -216,7 +216,7 @@ class MemoryClient:
             headers["x-workspace-id"] = self.workspace_id
         request_headers = headers or None
 
-        max_attempts = int(self.max_retries)
+        max_attempts = max(1, int(self.max_retries))
         if method.upper() == "POST" and endpoint in _NON_IDEMPOTENT_POST_ENDPOINTS:
             max_attempts = 1
 
@@ -485,7 +485,7 @@ class MemoryClient:
                 logger.debug("memory context fetch failed", exc_info=True)
                 return None
 
-        if include_preferences and user_id:
+        if include_preferences and user_id and int(preference_limit) > 0:
             prefs = _call_memory(
                 self.memory_read,
                 tier="preferences",
@@ -508,11 +508,12 @@ class MemoryClient:
                 sections.append(stm_context)
 
         search_query = str(query or "").strip()
-        if search_query and include_semantic:
+        resolved_semantic_top_k = top_k if semantic_top_k is None else semantic_top_k
+        if search_query and include_semantic and int(resolved_semantic_top_k) > 0:
             semantic = _call_memory(
                 self._memory_search_with_fallback,
                 query=search_query,
-                top_k=int(semantic_top_k or top_k),
+                top_k=int(resolved_semantic_top_k),
                 tiers=["semantic"],
                 max_queries=int(max_search_queries or 1),
             )
@@ -524,11 +525,12 @@ class MemoryClient:
             if semantic_context:
                 sections.append(semantic_context)
 
-        if search_query and include_graph:
+        resolved_graph_top_k = top_k if graph_top_k is None else graph_top_k
+        if search_query and include_graph and int(resolved_graph_top_k) > 0:
             graph = _call_memory(
                 self._memory_search_with_fallback,
                 query=search_query,
-                top_k=int(graph_top_k or top_k),
+                top_k=int(resolved_graph_top_k),
                 tiers=["graph"],
                 max_queries=int(max_search_queries or 1),
             )

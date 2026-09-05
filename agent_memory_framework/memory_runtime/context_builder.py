@@ -112,9 +112,10 @@ class ContextBuilder:
 
         defaults = ContextPlan(
             include_wm=True,
+            include_preferences=bool(self.config.get("include_preferences", True)),
             preference_keys=[str(k) for k in default_pref_keys],
-            stm_last_k=int(getattr(policy, "stm_max_summaries", 15) or 15),
-            semantic_top_k=int(getattr(policy, "semantic_top_k", 5) or 5),
+            stm_last_k=int(getattr(policy, "stm_max_summaries", 15)),
+            semantic_top_k=int(getattr(policy, "semantic_top_k", 5)),
         )
 
         plan = LLMContextPlanner().plan(user_query=user_query, defaults=defaults)
@@ -122,9 +123,11 @@ class ContextBuilder:
         if plan.include_wm:
             self._append_working_memory_context(enhanced_context)
 
-        # Option 3: inject ALL of the user's preferences (deduped latest-per-key, capped)
-        # instead of relying on the planner to guess exact key names.
-        self._append_all_preferences_context(enhanced_context)
+        if plan.include_preferences:
+            if plan.preference_keys:
+                self._append_preferences_context(enhanced_context, plan.preference_keys)
+            else:
+                self._append_all_preferences_context(enhanced_context)
 
         # STM: planner decides last_k; keep filtering heuristic as fallback only.
         if plan.stm_last_k > 0:
@@ -144,13 +147,12 @@ class ContextBuilder:
             if semantic_facts:
                 semantic_context = self._format_semantic_context(semantic_facts)
                 enhanced_context.append({"role": "system", "content": semantic_context})
-            try:
-                graph_top_k = int(os.getenv("AGENT_GRAPH_CONTEXT_TOP_K", "8") or "8")
-            except Exception:
-                graph_top_k = 8
-            graph_facts = self._get_relevant_graph_facts(
-                user_query, top_k=max(int(plan.semantic_top_k), graph_top_k)
-            )
+        try:
+            graph_top_k = int(os.getenv("AGENT_GRAPH_CONTEXT_TOP_K", "8") or "8")
+        except Exception:
+            graph_top_k = 8
+        if graph_top_k > 0:
+            graph_facts = self._get_relevant_graph_facts(user_query, top_k=graph_top_k)
             if graph_facts:
                 graph_context = self._format_graph_context(graph_facts)
                 enhanced_context.append({"role": "system", "content": graph_context})
@@ -272,7 +274,9 @@ class ContextBuilder:
 
     def _get_relevant_semantic_facts(self, user_query: str, top_k: Optional[int] = None) -> List[Dict[str, Any]]:
         """Retrieve semantic facts relevant to the current query."""
-        requested_k = int(top_k or self.semantic_top_k)
+        requested_k = int(self.semantic_top_k if top_k is None else top_k)
+        if requested_k <= 0:
+            return []
         search_k = max(requested_k * 3, requested_k + 10)
         facts: List[Dict[str, Any]] = []
         try:
@@ -388,7 +392,9 @@ class ContextBuilder:
 
     def _get_relevant_graph_facts(self, user_query: str, top_k: Optional[int] = None) -> List[Dict[str, Any]]:
         """Retrieve graph relations relevant to the current query."""
-        requested_k = int(top_k or self.semantic_top_k)
+        requested_k = int(self.semantic_top_k if top_k is None else top_k)
+        if requested_k <= 0:
+            return []
         search_k = max(requested_k * 2, requested_k + 5)
         hits: List[Dict[str, Any]] = []
         try:
@@ -504,19 +510,36 @@ class ContextBuilder:
         enhanced.append({"role": "system", "content": "## Working Memory\n" + str(state)})
 
     def _append_preferences_context(self, enhanced: List[Dict[str, Any]], keys: List[str]) -> None:
-        if not keys:
+        try:
+            cap = int(os.getenv("AGENT_PREF_CONTEXT_MAX", "50") or "50")
+        except Exception:
+            cap = 50
+        if cap <= 0:
             return
-        prefs = []
-        for k in keys:
+        normalized_keys = list(
+            dict.fromkeys(str(key).strip() for key in keys if str(key).strip())
+        )[:cap]
+        prefs: Dict[str, Any] = {}
+        for key in normalized_keys:
             try:
-                v = self.memory_manager.retrieve_ltm_preference(k)
+                value = self.memory_manager.retrieve_ltm_preference(key)
             except Exception:
-                v = None
-            if v is not None:
-                prefs.append((k, v))
+                value = None
+            if value is not None:
+                prefs[key] = value
+        prefs = filter_preferences(prefs)
         if not prefs:
             return
-        lines = ["## User Preferences"] + [f"- {k}: {v}" for k, v in prefs]
+        try:
+            max_value_length = int(os.getenv("AGENT_PREF_VALUE_MAXLEN", "200") or "200")
+        except Exception:
+            max_value_length = 200
+        lines = ["## User Preferences"]
+        for key, value in prefs.items():
+            rendered_value = str(value)
+            if len(rendered_value) > max_value_length:
+                rendered_value = rendered_value[:max_value_length] + "…"
+            lines.append(f"- {key}: {rendered_value}")
         enhanced.append({"role": "system", "content": "\n".join(lines)})
 
     def _append_all_preferences_context(self, enhanced: List[Dict[str, Any]]) -> None:
@@ -525,6 +548,8 @@ class ContextBuilder:
             cap = int(os.getenv("AGENT_PREF_CONTEXT_MAX", "50") or "50")
         except Exception:
             cap = 50
+        if cap <= 0:
+            return
         try:
             prefs = self.memory_manager.list_ltm_preferences(limit=max(cap * 2, cap + 20))
         except Exception:
