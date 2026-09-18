@@ -559,7 +559,7 @@ class ContextBuilder:
         prefs = filter_preferences(prefs)
         if not prefs:
             return
-        prefs = dict(list(prefs.items())[:cap])
+        prefs = {k: prefs[k] for k in sorted(prefs)[:cap]}
         try:
             max_val = int(os.getenv("AGENT_PREF_VALUE_MAXLEN", "200") or "200")
         except Exception:

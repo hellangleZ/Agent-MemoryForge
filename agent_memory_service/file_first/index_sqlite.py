@@ -201,7 +201,7 @@ class SqliteFtsIndex:
                 created_at,
                 int(line_start),
                 content,
-                json.dumps(metadata or {}, ensure_ascii=False),
+                json.dumps(metadata or {}, ensure_ascii=False, default=str),
                 pref_key,
             ),
         )
@@ -221,7 +221,7 @@ class SqliteFtsIndex:
                     chunk.get("created_at"),
                     int(chunk.get("line_start") or 1),
                     chunk.get("content") or "",
-                    json.dumps(chunk.get("metadata") or {}, ensure_ascii=False),
+                    json.dumps(chunk.get("metadata") or {}, ensure_ascii=False, default=str),
                     chunk.get("pref_key"),
                 )
             )
@@ -280,7 +280,7 @@ class SqliteFtsIndex:
                 int(arr.size),
                 arr.tobytes(),
                 content,
-                json.dumps(metadata or {}, ensure_ascii=False),
+                json.dumps(metadata or {}, ensure_ascii=False, default=str),
             ),
         )
         self.conn.commit()

@@ -23,7 +23,7 @@ def normalize_metadata(meta: Dict[str, Any]) -> Dict[str, Any]:
 
 def format_entry(*, metadata: Dict[str, Any], content_md: str) -> str:
     meta = normalize_metadata(metadata)
-    header = f"{ENTRY_PREFIX}{json.dumps(meta, ensure_ascii=False, separators=(',', ':'))}{ENTRY_SUFFIX}"
+    header = f"{ENTRY_PREFIX}{json.dumps(meta, ensure_ascii=False, separators=(',', ':'), default=str)}{ENTRY_SUFFIX}"
     body = (content_md or "").rstrip()
     if body:
         return header + "\n" + body + "\n"

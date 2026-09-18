@@ -224,9 +224,9 @@ def _vector_executor() -> ThreadPoolExecutor:
 def _append_text(path: Path, text: str) -> int:
     """Append text and return the start line number (1-based) where this text begins."""
     _ensure_dir(path)
-    start_line = _count_lines(path)
     payload = text if text.endswith("\n") else (text + "\n")
     with open(path, "a", encoding="utf-8") as f:
+        start_line = _count_lines(path)
         f.write(payload)
     return start_line
 
@@ -236,23 +236,13 @@ def _file_lock(path: Path):
     _ensure_dir(path)
     lock_path = path.with_name(path.name + ".lock")
     with open(lock_path, "a", encoding="utf-8") as lock_file:
-        try:
-            import fcntl
+        import fcntl
 
-            fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX)
-        except Exception:
-            logger.warning(
-                "file lock unavailable; falling back to process lock path=%s", path
-            )
+        fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX)
         try:
             yield
         finally:
-            try:
-                import fcntl
-
-                fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
-            except Exception:
-                pass
+            fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
 
 
 def _write_text_atomic(path: Path, text: str) -> None:
@@ -721,6 +711,10 @@ class FileFirstBackend:
         try:
             stale = self._compute_index_stale(ws_root=ws_root)
         except Exception:
+            logger.exception(
+                "staleness check failed; skipping auto rebuild",
+                extra={"workspace": str(ws_root)},
+            )
             return
         if not stale:
             return
@@ -1181,7 +1175,10 @@ class FileFirstBackend:
                 content = str(
                     summary.get("final_answer") or metadata.get("summary") or ""
                 ).strip()
-            content = content or "(empty summary)"
+            if not content:
+                raise HTTPException(
+                    status_code=422, detail="stm write requires content"
+                )
             metadata["conversation_id"] = conv_id
             rel_path = f"stm/{conv_id}.md"
             overwrite = False
@@ -1205,7 +1202,9 @@ class FileFirstBackend:
             if not content:
                 state_obj = self._coerce_wm_state_to_json_object(state)
                 content = (
-                    "```json\n" + json.dumps(state_obj, ensure_ascii=False) + "\n```"
+                    "```json\n"
+                    + json.dumps(state_obj, ensure_ascii=False, default=str)
+                    + "\n```"
                 )
             metadata["task_id"] = task_id
             rel_path = f"wm/{task_id}.md"
@@ -1398,9 +1397,11 @@ class FileFirstBackend:
                                 memory_kinds=memory_kinds,
                                 path_prefixes=path_prefixes,
                             )
-                        vector_hit_count = len(_vhits or [])
+                        _vhits = [
+                            h for h in (_vhits or []) if _hit_is_visible_to_actor(h, payload)
+                        ]
+                        vector_hit_count = len(_vhits)
                         hits = _rrf_merge(hits, _vhits, top_k)
-                        hits = [h for h in hits if _hit_is_visible_to_actor(h, payload)]
                 except Exception:
                     logger.exception("vector search failed; using FTS results only")
         finally:
@@ -1618,8 +1619,8 @@ class FileFirstBackend:
                 raise HTTPException(status_code=403, detail="memory user scope denied")
 
         if start_line is not None or max_lines is not None:
-            s = int(start_line or 1)
-            m = int(max_lines or 200)
+            s = int(start_line) if start_line is not None else 1
+            m = int(max_lines) if max_lines is not None else 200
             if s <= 0 or m <= 0:
                 raise HTTPException(
                     status_code=422, detail="Invalid start_line/max_lines"
@@ -1746,17 +1747,7 @@ class FileFirstBackend:
             )
         except FileNotFoundError:
             idx_mtime_s = None
-        latest_md_mtime_s: float | None = None
-        for p in md_files:
-            try:
-                latest_md_mtime_s = max(
-                    latest_md_mtime_s or 0.0, float(p.stat().st_mtime)
-                )
-            except FileNotFoundError:
-                continue
-        index_stale = bool(
-            idx_mtime_s and latest_md_mtime_s and latest_md_mtime_s > idx_mtime_s + 1.0
-        )
+        index_stale = self._compute_index_stale(ws_root=ws)
 
         # Portal/admin UI expects this shape.
         return {

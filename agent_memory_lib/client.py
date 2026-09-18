@@ -276,10 +276,14 @@ class MemoryClient:
                 response = getattr(e, "response", None)
                 status_code = getattr(response, "status_code", None)
                 response_text = getattr(response, "text", None)
+                retryable = status_code in (429, 502, 503, 504)
                 logger.error(
                     "HTTP error",
                     extra={"url": url, "status_code": status_code},
                 )
+                if retryable and attempt < max_attempts - 1:
+                    time.sleep(2**attempt)
+                    continue
                 raise MemoryServiceError(
                     f"HTTP error: {e}",
                     status_code=status_code,
