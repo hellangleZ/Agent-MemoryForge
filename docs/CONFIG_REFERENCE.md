@@ -306,6 +306,35 @@ tiers should be recalled before the main LLM call.
 - `CONTEXT_PLANNER_AZURE_OPENAI_DEPLOYMENT`
 - `CONTEXT_PLANNER_AZURE_OPENAI_API_VERSION`
 
+### TypeSafe (Jev) decision model
+
+The product can use TypeSafe's Jev System One model for structured decisions
+instead of asking a general LLM to emit JSON and parsing it back. It is fully
+opt-in: without `TYPESAFE_API_KEY` every decision point falls back to the
+existing behavior (LLM planner, then static defaults; or the regex guardrails).
+
+- `TYPESAFE_API_KEY` - enables the TypeSafe client when set
+- `TYPESAFE_BASE_URL` (default: `https://api.typesafe.ai`)
+- `TYPESAFE_MODEL` (default: `jev-latest`)
+- `TYPESAFE_TIMEOUT` (seconds, default: `5`)
+
+Decision points that use it:
+
+- **Context planner** (`agent_memory_framework/memory_runtime/context_planner_typesafe.py`):
+  evaluates which memory tiers to include (Choice) and how much STM/semantic to
+  retrieve (Score), in one parallel call. Falls back to the LLM planner, then to
+  static defaults, when unavailable or below the confidence threshold.
+  - `CONTEXT_PLANNER_TYPESAFE_MIN_CONFIDENCE` (default: `0.6`)
+
+- **Distill persistence guardrail** (`agent_memory_framework/memory_runtime/memory_safety_typesafe.py`):
+  answers Noul questions (is the memory durable, is it uncertain, is it grounded
+  in the user's evidence) to decide whether a distilled memory may persist.
+  Falls back to the regex heuristics in `memory_safety.py`.
+  - `MEMORY_SAFETY_TYPESAFE_ENABLED` (`1`/`0`, default: `0`)
+  - `MEMORY_SAFETY_TYPESAFE_PERSIST_MIN` (default: `0.8`)
+  - `MEMORY_SAFETY_TYPESAFE_UNCERTAIN_MIN` (default: `0.7`)
+  - `MEMORY_SAFETY_TYPESAFE_GROUNDED_MIN` (default: `0.6`)
+
 ## Workspace MCP
 
 Tenant/workspace MCP configuration is stored through portal APIs, not process

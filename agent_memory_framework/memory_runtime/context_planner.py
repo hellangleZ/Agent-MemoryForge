@@ -119,6 +119,17 @@ class LLMContextPlanner:
         user_query: str,
         defaults: ContextPlan,
     ) -> ContextPlan:
+        try:
+            from agent_memory_framework.memory_runtime.context_planner_typesafe import (
+                TypeSafeContextPlanner,
+            )
+
+            planned = TypeSafeContextPlanner().plan(user_query=user_query, defaults=defaults)
+            if planned is not None:
+                return planned
+        except Exception:
+            logger.debug("typesafe context planner unavailable", exc_info=True)
+
         if not self.settings.enabled:
             return defaults
 

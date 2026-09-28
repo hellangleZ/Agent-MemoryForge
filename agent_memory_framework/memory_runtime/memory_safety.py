@@ -274,6 +274,24 @@ def should_persist_distilled_memory(
     payload = {"text": candidate_text, "metadata": dict(metadata or {})}
     if not is_safe_memory_payload(payload):
         return False
+
+    # Semantic guardrail (Jev / TypeSafe): when configured and confident, it
+    # decides persistence; otherwise we fall back to the regex heuristics below.
+    try:
+        from agent_memory_framework.memory_runtime.memory_safety_typesafe import (
+            evaluate_persistence,
+        )
+
+        verdict = evaluate_persistence(
+            candidate_text=candidate_text,
+            user_messages=user_messages,
+            require_user_grounding=require_user_grounding,
+        )
+    except Exception:
+        verdict = None
+    if verdict is not None:
+        return verdict
+
     if is_uncertain_memory(candidate_text):
         return False
     if require_user_grounding and not is_user_grounded(candidate_text, user_messages):
